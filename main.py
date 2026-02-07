@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models
 from models import Medication
@@ -10,6 +11,14 @@ from fastapi.security import OAuth2PasswordBearer
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cho phép mọi nơi gọi vào (hoặc điền cụ thể domain nếu cần bảo mật cao)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Định nghĩa dữ liệu đầu vào (Schema)
 class UserCreate(BaseModel):
