@@ -24,8 +24,11 @@ class Medication(Base):
     id = Column(Integer, primary_key=True, index=True) # ID tự tăng
     name = Column(String, index=True)
     dosage = Column(String)    # Liều lượng (1 viên)
-    frequency = Column(String) # Giờ uống (08:00)
+    frequency = Column(String) # Ví dụ: Sáng 1, Chiều 1
     notes = Column(String, nullable=True)
+    
+    total_quantity = Column(Integer, default=0) # Tổng số (VD: 63)
+    unit = Column(String, default="viên")       # Đơn vị (VD: viên, gói, chai)
     
     # Khóa ngoại: Thuốc này thuộc về User nào
     user_id = Column(String, ForeignKey("users.id"))
