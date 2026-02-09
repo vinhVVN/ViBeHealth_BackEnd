@@ -8,11 +8,16 @@ from pydantic import BaseModel
 from fastapi.security import OAuth2PasswordBearer
 from ocr_analyzer import OCRAnalyzer
 from utils.logger import log_ocr_input
+# from gemini_service import GeminiOCRService
+from groq_service import GroqOCRService
 
 # Tự động tạo bảng trong DB nếu chưa có
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+groqservice= GroqOCRService()
+regex_analyzer = OCRAnalyzer()
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -123,11 +128,29 @@ def get_my_medications(
 @app.post("/api/ocr/analyze")
 def analyze_ocr(request: OCRRequest):
     
-    log_ocr_input(request.raw_text)
-    # Gọi hàm phân tích
-    results = analyzer.analyze(request.raw_text)
-    
-    if not results:
-        return {"status": "empty", "message": "Không tìm thấy tên thuốc nào khớp", "data": []}
+    try:
+        print("🚀 Đang gọi Groq AI...")
+        results = groqservice.analyze_prescription(request.raw_text)
         
-    return {"status": "success", "data": results}
+        if results and len(results) > 0:
+            print(f"✅ Groq thành công! Tìm thấy {len(results)} thuốc.")
+            return {
+                "status": "success", 
+                "method": "GROQ_LLAMA3", 
+                "data": results
+            }
+        else:
+            print("⚠️ Groq trả về rỗng.")
+            
+    except Exception as e:
+        print(f"❌ Groq Critical Error: {e}")
+
+    # CHIẾN THUẬT 2: Fallback về Regex (Cổ điển, Ổn định, Offline logic)
+    print("🔧 Chuyển sang chế độ Regex Fallback...")
+    results = regex_analyzer.analyze(request.raw_text)
+    
+    return {
+        "status": "success", 
+        "method": "REGEX_ALGORITHM", 
+        "data": results
+    }
