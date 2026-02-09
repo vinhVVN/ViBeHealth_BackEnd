@@ -1,15 +1,26 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, get_db
 import models
 from models import Medication
 from pydantic import BaseModel
 from fastapi.security import OAuth2PasswordBearer
+from ocr_analyzer import OCRAnalyzer
+from utils.logger import log_ocr_input
 
 # Tự động tạo bảng trong DB nếu chưa có
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cho phép mọi nơi gọi vào (hoặc điền cụ thể domain nếu cần bảo mật cao)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Định nghĩa dữ liệu đầu vào (Schema)
 class UserCreate(BaseModel):
@@ -27,6 +38,15 @@ class MedicationCreate(BaseModel):
     dosage: str
     frequency: str
     notes: str | None = None
+    total_quantity: int = 0
+    unit: str = "viên"
+
+# Schema nhận dữ liệu từ Android
+class OCRRequest(BaseModel):
+    raw_text: str
+    
+# Khởi tạo analyzer 1 lần để dùng mãi
+analyzer = OCRAnalyzer()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 def get_current_user_email(token: str = Depends(oauth2_scheme)):
@@ -81,7 +101,9 @@ def create_medication(
         dosage=med.dosage,
         frequency=med.frequency,
         notes=med.notes,
-        user_id=user.id # Gán thuốc cho user này
+        user_id=user.id, # Gán thuốc cho user này
+        total_quantity= med.total_quantity,
+        unit=med.unit
     )
     db.add(new_med)
     db.commit()
@@ -96,3 +118,16 @@ def get_my_medications(
 ):
     user = db.query(models.User).first() # Demo lấy user đầu tiên
     return user.medications
+
+
+@app.post("/api/ocr/analyze")
+def analyze_ocr(request: OCRRequest):
+    
+    log_ocr_input(request.raw_text)
+    # Gọi hàm phân tích
+    results = analyzer.analyze(request.raw_text)
+    
+    if not results:
+        return {"status": "empty", "message": "Không tìm thấy tên thuốc nào khớp", "data": []}
+        
+    return {"status": "success", "data": results}
